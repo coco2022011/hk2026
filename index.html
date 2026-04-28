@@ -29,15 +29,15 @@
 
     <script>
         const firebaseConfig = {
-            apiKey: "AIzaSyAzCpLLNbc1ytaytke0cvwrkRumeaCkxUo", // 這裡請填入你從 Firebase 複製的長金鑰
+            apiKey: "AIzaSyDvYWGfyFZb2TNbug8NXZrAzNMmv7DwlEM", // 請對照截圖填入
             authDomain: "hk-travel-1c9bc.firebaseapp.com",
             projectId: "hk-travel-1c9bc",
-            storageBucket: "hk-travel-1c9bc.firebasestorage.app", // 格式對了！
-            messagingSenderId: "502792710467",
-            appId: "1:502792710467:web:4034ebba5a301e9777a7f6"
+            storageBucket: "hk-travel-1c9bc.firebasestorage.app",
+            messagingSenderId: "G-GECQY9491Y", // 請對照截圖填入純數字
+            appId: "1:502792710467:web:4034ebba5a301e9777a7f6" // 請對照截圖填入 1:50... 開頭那串
         };
 
-        // 防止重複初始化
+        // 初始化連線
         if (!firebase.apps.length) {
             firebase.initializeApp(firebaseConfig);
         }
@@ -54,58 +54,38 @@
             const [selectedDay, setSelectedDay] = useState(1);
             const [itinerary, setItinerary] = useState([]);
             const [expenses, setExpenses] = useState([]);
-            const appId = 'hk-travel-2026-v-final-safe-v20'; // 你的 App 識別碼
-            const [customRate, setCustomRate] = useState(4.15);
-            const [transInput, setTransInput] = useState('');
+            const appId = 'hk-travel-2026-v-final-safe-v20'; // 這是資料夾識別碼
 
-            // 初始化 Auth 與 Lucide 圖標
             useEffect(() => {
+                // 匿名登入，確保能讀取資料庫
                 auth.signInAnonymously().catch(console.error);
-                auth.onAuthStateChanged((u) => {
-                    setUser(u);
-                });
-                // 網頁載入後先跑一次圖標初始化
+                auth.onAuthStateChanged((u) => setUser(u));
+                // 初始化圖標
                 setTimeout(() => lucide.createIcons(), 500);
             }, []);
 
-            // 每當切換分頁或資料變動，重新掃描圖標
             useEffect(() => {
                 lucide.createIcons();
             }, [activeTab, selectedDay, itinerary]);
 
-            // 資料訂閱 (Cloud Sync)
+            // 從 Firestore 同步資料
             useEffect(() => {
                 if (!user) return;
                 const path = `artifacts/${appId}/public/data`;
                 
-                // 訂閱行程
+                // 讀取行程
                 const unsubIt = db.doc(`${path}/itinerary/main`).onSnapshot(snap => {
                     if(snap.exists()) setItinerary(JSON.parse(snap.data().json));
                 });
-                // 訂閱記帳
+                // 讀取記帳
                 const unsubExp = db.collection(`${path}/expenses`).onSnapshot(snap => {
-                    setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
+                    setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
                 });
 
                 return () => { unsubIt(); unsubExp(); };
             }, [user]);
 
-            // 結算邏輯
-            const settlement = useMemo(() => {
-                let d = 0, i = 0;
-                expenses.forEach(e => {
-                    const amt = (e.currency === 'HKD' ? parseFloat(e.amount) * customRate : parseFloat(e.amount)) || 0;
-                    if (e.payer === 'Ding') d += amt; else i += amt;
-                });
-                const diff = Math.abs(d - (d + i) / 2);
-                return { 
-                    dTotal: d, 
-                    iTotal: i, 
-                    who: d > i ? { debtor: 'Iris', creditor: 'Ding', amt: diff } : { debtor: 'Ding', creditor: 'Iris', amt: diff } 
-                };
-            }, [expenses, customRate]);
-
-            // 載入畫面
+            // 載入畫面：如果還沒連上 Firebase 或沒資料，會顯示這個
             if (!user || itinerary.length === 0) return (
                 <div className="flex flex-col items-center justify-center min-h-screen bg-[#f5f0e6]">
                     <div className="animate-bounce text-rose-400">
@@ -135,18 +115,19 @@
                                         <button key={d} onClick={() => setSelectedDay(d)} className={`w-10 h-10 rounded-full font-black text-xs border-2 ${selectedDay === d ? 'bg-[#7f5539] text-white' : 'bg-white'}`}>{d}</button>
                                     ))}
                                 </div>
-                                <div className="bg-white rounded-[2rem] p-6 shadow-xl space-y-6 text-left">
+                                
+                                <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-[#ede0d4] text-left">
                                     <div className="flex items-start gap-4">
                                         <i data-lucide="bed" className="text-rose-400 mt-1"></i>
-                                        <div className="flex-1">
+                                        <div>
                                             <p className="text-[11px] font-black text-[#a69685] uppercase">Stay / 住宿</p>
-                                            <h4 className="font-black text-[18px]">{itinerary[selectedDay-1]?.hotel}</h4>
+                                            <h4 className="font-black text-[18px]">{itinerary[selectedDay-1]?.hotel || "未定"}</h4>
                                         </div>
                                     </div>
                                 </div>
-                                {/* 行程項目 */}
-                                {(itinerary[selectedDay-1]?.activities || []).map((act, idx) => (
-                                    <div key={idx} className="bg-white rounded-[2rem] p-6 shadow-xl text-left border border-[#ede0d4]">
+
+                                {itinerary[selectedDay-1]?.activities?.map((act, i) => (
+                                    <div key={i} className="bg-white rounded-[2rem] p-6 shadow-xl text-left border border-[#ede0d4]">
                                         <div className="flex items-center gap-2 mb-2">
                                             <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded">{act.time}</span>
                                             <h4 className="font-black text-[18px]">{act.title}</h4>
@@ -156,33 +137,22 @@
                                 ))}
                             </div>
                         )}
-
-                        {activeTab === 'expense' && (
-                            <div className="space-y-6 text-left">
-                                <div className="bg-[#f2ca5e] p-5 rounded-3xl text-center shadow-lg">
-                                    <h4 className="font-black">{settlement.who.debtor} 需付給 {settlement.who.creditor}</h4>
-                                    <p className="text-2xl font-black">NT$ {settlement.who.amt.toFixed(0)}</p>
-                                </div>
-                                {expenses.map(e => (
-                                    <div key={e.id} className="bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center border border-[#ede0d4]">
-                                        <div className="font-black">
-                                            <p>{e.title}</p>
-                                            <p className="text-xs text-[#a69685]">{e.currency} {e.amount} (by {e.payer})</p>
-                                        </div>
-                                        <i data-lucide="receipt" className="text-[#dcd2c3]"></i>
-                                    </div>
-                                ))}
+                        {/* 這裡可以繼續擴充 expense, tools 等分頁 */}
+                        {activeTab !== 'home' && (
+                            <div className="flex flex-col items-center justify-center py-20 text-stone-400">
+                                <i data-lucide="construction" style={{width:48, height:48}}></i>
+                                <p className="mt-4 font-black">此分頁建設中...</p>
                             </div>
                         )}
                     </main>
 
-                    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t-2 border-[#dcd2c3] px-4 py-4 flex justify-between items-center max-w-md mx-auto z-50 rounded-t-[2.5rem]">
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t-2 border-[#dcd2c3] px-4 py-4 flex justify-between items-center max-w-md mx-auto z-50 rounded-t-[2.5rem] shadow-2xl">
                         {[
                             { id: 'home', icon: 'calendar', label: '行程' },
                             { id: 'expense', icon: 'receipt', label: '記帳' },
-                            { id: 'tools', icon: 'languages', label: '翻譯' }
+                            { id: 'tools', icon: 'languages', label: '工具' }
                         ].map(tab => (
-                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-1 transition-all ${activeTab === tab.id ? 'text-[#e87a90] scale-110' : 'text-[#dcd2c3]'}`}>
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-1 ${activeTab === tab.id ? 'text-[#e87a90]' : 'text-[#dcd2c3]'}`}>
                                 <i data-lucide={tab.icon} style={{width:22, height:22}}></i>
                                 <span className="text-[10px] font-black uppercase">{tab.label}</span>
                             </button>
