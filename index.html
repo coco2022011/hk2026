@@ -3,162 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>香港。行 2026 - 雲端行程筆記</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <title>香港迪士尼行 2026</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide@latest"></script>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+TC:wght@400;700;900&display=swap" rel="stylesheet">
-    
     <style>
-        body { font-family: 'Noto Serif TC', serif; background-color: #f5f0e6; }
+        body { font-family: 'Noto Serif TC', serif; background-color: #f5f0e6; -webkit-font-smoothing: antialiased; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .rotate-2 { transform: rotate(2deg); }
-        @-webkit-keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .animate-in { animation: fadeIn 0.5s ease-in; }
+        input, textarea, button { font-family: 'Noto Serif TC', serif; }
+        .mtr-grid-item { transition: all 0.3s ease; }
+        .paper-texture { 
+            position: fixed; inset: 0; pointer-events: none; opacity: 0.05; z-index: 100;
+            background-image: url('https://www.transparenttextures.com/patterns/paper-fibers.png'); 
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script type="module">
+        import React, { useState, useEffect, useMemo, useRef } from 'https://esm.sh/react@18.2.0';
+        import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
+        import { 
+            MapPin, CheckCircle2, Calendar, Utensils, Train, Camera, Wallet, X, Plus, 
+            Languages, ShoppingBag, Trash2, Edit2, Save, RefreshCw, Navigation, 
+            Star, Clock, ArrowRight, Search, Volume2, Anchor, Receipt, LayoutGrid, 
+            BookOpen, Bed, ArrowLeftRight, Sparkles, Loader2, Upload, ExternalLink 
+        } from 'https://esm.sh/lucide-react';
+        
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, setDoc, collection, onSnapshot, addDoc, deleteDoc, updateDoc } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-    <script>
-        const firebaseConfig = {
-            apiKey: "AIzaSyDvYWGfyFZb2TNbug8NXZrAzNMmv7DwlEM", // 請對照截圖填入
-            authDomain: "hk-travel-1c9bc.firebaseapp.com",
-            projectId: "hk-travel-1c9bc",
-            storageBucket: "hk-travel-1c9bc.firebasestorage.app",
-            messagingSenderId: "G-GECQY9491Y", // 請對照截圖填入純數字
-            appId: "1:502792710467:web:4034ebba5a301e9777a7f6" // 請對照截圖填入 1:50... 開頭那串
+        // 1. Firebase 
+        const firebaseConfig = { 
+            apiKey: "AIzaSyDvYWGfyFZb2TNbug8NXZrAzNMmv7DwlEM", 
+            authDomain: "hk-travel-1c9bc.firebaseapp.com", 
+            projectId: "hk-travel-1c9bc", 
+            storageBucket: "hk-travel-1c9bc.firebasestorage.app", 
+            messagingSenderId: "502792710467", 
+            appId: "1:502792710467:web:4034ebba5a301e9777a7f6" 
+            measurementId : "G-GECQY9491Y" 
         };
 
-        // 初始化連線
-        if (!firebase.apps.length) {
-            firebase.initializeApp(firebaseConfig);
-        }
-        const db = firebase.firestore();
-        const auth = firebase.auth();
-    </script>
+        const firebaseApp = initializeApp(firebaseConfig);
+        const auth = getAuth(firebaseApp);
+        const db = getFirestore(firebaseApp);
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
+        // 2. 路徑與資料邏輯
+        const appId = 'hk-travel-2026-v-final-safe-v20';
 
         const App = () => {
             const [user, setUser] = useState(null);
-            const [activeTab, setActiveTab] = useState('home'); 
+            const [activeTab, setActiveTab] = useState('home');
             const [selectedDay, setSelectedDay] = useState(1);
+            const [isEditing, setIsEditing] = useState(false);
+            const [clickCount, setClickCount] = useState(0); // 編輯模式暗號
+
+            // Firestore 資料狀態
             const [itinerary, setItinerary] = useState([]);
             const [expenses, setExpenses] = useState([]);
-            const appId = 'hk-travel-2026-v-final-safe-v20'; // 這是資料夾識別碼
+            const [mustItems, setMustItems] = useState([]);
+            const [mtrGrid, setMtrGrid] = useState([]);
+            const [notices, setNotices] = useState([]);
 
+            // 匿名登入
             useEffect(() => {
-                // 匿名登入，確保能讀取資料庫
-                auth.signInAnonymously().catch(console.error);
-                auth.onAuthStateChanged((u) => setUser(u));
-                // 初始化圖標
-                setTimeout(() => lucide.createIcons(), 500);
+                signInAnonymously(auth).catch(err => console.error("Auth Error:", err));
+                const unsub = onAuthStateChanged(auth, setUser);
+                return () => unsub();
             }, []);
 
-            useEffect(() => {
-                lucide.createIcons();
-            }, [activeTab, selectedDay, itinerary]);
-
-            // 從 Firestore 同步資料
+            // 資料即時監聽 (依照網管規格：if (snap.exists) 不加括號)
             useEffect(() => {
                 if (!user) return;
-                const path = `artifacts/${appId}/public/data`;
-                
-                // 讀取行程
-                const unsubIt = db.doc(`${path}/itinerary/main`).onSnapshot(snap => {
-                    if(snap.exists) setItinerary(JSON.parse(snap.data().json));
-                });
-                // 讀取記帳
-                const unsubExp = db.collection(`${path}/expenses`).onSnapshot(snap => {
-                    setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+                const unsubIt = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'itinerary', 'main'), (snap) => {
+                    if (snap.exists) { setItinerary(JSON.parse(snap.data().json || "[]")); }
                 });
 
-                return () => { unsubIt(); unsubExp(); };
+                const unsubMtr = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'mtr', 'main'), (snap) => {
+                    if (snap.exists) { setMtrGrid(JSON.parse(snap.data().json || "[]")); }
+                });
+
+                const unsubNotice = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'notices', 'main'), (snap) => {
+                    if (snap.exists) { setNotices(JSON.parse(snap.data().json || "[]")); }
+                });
+
+                const unsubExp = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'expenses'), (snap) => {
+                    setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
+                });
+
+                const unsubMust = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'mustItems'), (snap) => {
+                    setMustItems(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
+                });
+
+                return () => { unsubIt(); unsubMtr(); unsubNotice(); unsubExp(); unsubMust(); };
             }, [user]);
 
-            // 載入畫面：如果還沒連上 Firebase 或沒資料，會顯示這個
-            if (!user || itinerary.length === 0) return (
-                <div className="flex flex-col items-center justify-center min-h-screen bg-[#f5f0e6]">
-                    <div className="animate-bounce text-rose-400">
-                        <i data-lucide="cloud" style={{width:48, height:48}}></i>
-                    </div>
-                    <p className="text-stone-500 font-black text-xs mt-4 uppercase">Connecting to Hong Kong...</p>
-                </div>
-            );
+            // 觸發編輯模式暗號
+            const handleHeaderClick = () => {
+                const newCount = clickCount + 1;
+                setClickCount(newCount);
+                if (newCount >= 5) {
+                    setIsEditing(!isEditing);
+                    setClickCount(0);
+                    alert(isEditing ? "編輯模式已關閉" : "管理員模式已開啟 ✨");
+                }
+            };
+
+            // 儲存方法
+            const saveToCloud = async (type, data) => {
+                await setDoc(doc(db, 'artifacts', appId, 'public', 'data', type, 'main'), { json: JSON.stringify(data) });
+            };
+
+            if (!user) return <div className="flex h-screen items-center justify-center text-xs tracking-widest opacity-30">LOADING...</div>;
 
             return (
-                <div className="max-w-md mx-auto bg-[#f5f0e6] min-h-screen relative pb-32 text-[#4e3b31]">
-                    <header className="pt-10 pb-6 px-6 relative flex flex-col items-center border-b border-[#ede0d4]">
-                        <div className="flex items-center gap-2 mb-1">
-                            <i data-lucide="anchor" className="text-[#9c6644] w-5 h-5"></i>
-                            <h2 className="text-[#e87a90] text-2xl font-black tracking-widest uppercase">香港。行</h2>
+                <div className="max-w-md mx-auto bg-[#f5f0e6] min-h-screen relative pb-32 overflow-x-hidden">
+                    <div className="paper-texture"></div>
+
+                    {/* Header */}
+                    <header className="pt-12 pb-8 px-6 text-center border-b border-[#ede0d4] bg-white/30 backdrop-blur-sm" onClick={handleHeaderClick}>
+                        <div className="flex items-center justify-center gap-3 mb-2">
+                            <Anchor className="text-[#9c6644] w-6 h-6" />
+                            <h2 className="text-[#e87a90] text-3xl font-black tracking-[0.3em] uppercase select-none">香港。行</h2>
                         </div>
-                        <div className="absolute top-8 right-6">
-                            <div className="bg-[#f2ca5e] px-4 py-1.5 rounded-full font-black text-xs shadow-md">DAY {selectedDay}</div>
-                        </div>
+                        <p className="text-[9px] text-[#a69685] font-black uppercase tracking-[0.5em]">2026 / TRAVEL LOG</p>
                     </header>
 
-                    <main className="p-4 animate-in">
+                    {/* Main Content (分頁邏輯) */}
+                    <main className="p-5 relative z-10">
                         {activeTab === 'home' && (
-                            <div className="space-y-6">
-                                <div className="flex justify-center gap-3 mb-6">
+                            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+                                <div className="flex justify-center gap-3 mb-8">
                                     {[1, 2, 3, 4].map(d => (
-                                        <button key={d} onClick={() => setSelectedDay(d)} className={`w-10 h-10 rounded-full font-black text-xs border-2 ${selectedDay === d ? 'bg-[#7f5539] text-white' : 'bg-white'}`}>{d}</button>
+                                        <button key={d} onClick={() => setSelectedDay(d)} className={`w-10 h-10 rounded-xl font-black text-xs border-2 transition-all ${selectedDay === d ? 'bg-[#7f5539] text-white border-[#4e3b31] shadow-lg' : 'bg-white text-[#8e7d6f] border-transparent'}`}>{d}</button>
                                     ))}
                                 </div>
                                 
-                                <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-[#ede0d4] text-left">
-                                    <div className="flex items-start gap-4">
-                                        <i data-lucide="bed" className="text-rose-400 mt-1"></i>
-                                        <div>
-                                            <p className="text-[11px] font-black text-[#a69685] uppercase">Stay / 住宿</p>
-                                            <h4 className="font-black text-[18px]">{itinerary[selectedDay-1]?.hotel || "未定"}</h4>
+                                {itinerary.filter(i => i.day === selectedDay).map((item, idx) => (
+                                    <div key={idx} className="bg-white rounded-[2rem] p-6 shadow-xl border border-[#ede0d4] relative mb-4">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="text-[10px] font-black bg-[#f5f0e6] px-2 py-1 rounded text-[#8e7d6f]">{item.activities?.[0]?.time || "00:00"}</span>
+                                            {isEditing && <button className="text-red-300" onClick={async () => {
+                                                const newIt = itinerary.filter((_, i) => i !== idx);
+                                                setItinerary(newIt);
+                                                await saveToCloud('itinerary', newIt);
+                                            }}><Trash2 size={16}/></button>}
                                         </div>
-                                    </div>
-                                </div>
-
-                                {itinerary[selectedDay-1]?.activities?.map((act, i) => (
-                                    <div key={i} className="bg-white rounded-[2rem] p-6 shadow-xl text-left border border-[#ede0d4]">
-                                        <div className="flex items-center gap-2 mb-2">
-                                       
-                                            <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded">{act.time}</span>
-                                            <h4 className="font-black text-[18px]">{act.title}</h4>
-                                        </div>
-                                        <p className="text-[#8e7d6f] italic text-sm">{act.notes}</p>
+                                        <h4 className="font-black text-xl text-[#4e3b31]">{item.hotel || "景點行程"}</h4>
                                     </div>
                                 ))}
+
+                                {isEditing && (
+                                    <button onClick={async () => {
+                                        const newItem = { day: selectedDay, hotel: "新地點", activities: [{time: "12:00"}] };
+                                        const updated = [...itinerary, newItem];
+                                        setItinerary(updated);
+                                        await saveToCloud('itinerary', updated);
+                                    }} className="w-full py-4 border-2 border-dashed border-[#dcd2c3] rounded-2xl text-[10px] font-black text-[#a69685]">+ 新增行程</button>
+                                )}
                             </div>
                         )}
-                        {/* 這裡可以繼續擴充 expense, tools 等分頁 */}
-                        {activeTab !== 'home' && (
-                            <div className="flex flex-col items-center justify-center py-20 text-stone-400">
-                                <i data-lucide="construction" style={{width:48, height:48}}></i>
-                                <p className="mt-4 font-black">此分頁建設中...</p>
-                            </div>
-                        )}
+
+                        {/* 分帳、清單、地鐵等分頁依此類推... */}
+                        {activeTab === 'expense' && <div className="text-center py-20 text-[#a69685]">分帳功能已連線至 Collection: expenses</div>}
+                        {activeTab === 'must' && <div className="text-center py-20 text-[#a69685]">清單功能已連線至 Collection: mustItems</div>}
+                        {activeTab === 'mtr' && <div className="text-center py-20 text-[#a69685]">地鐵功能已連線至 Doc: mtr/main</div>}
+                        {activeTab === 'tools' && <div className="text-center py-20 text-[#a69685]">工具功能運作中</div>}
+                        {activeTab === 'calc' && <div className="text-center py-20 text-[#a69685]">記事功能已連線至 Doc: notices/main</div>}
                     </main>
 
-                    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t-2 border-[#dcd2c3] px-4 py-4 flex justify-between items-center max-w-md mx-auto z-50 rounded-t-[2.5rem] shadow-2xl">
+                    {/* Bottom Nav */}
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#dcd2c3] px-4 py-5 flex justify-between items-center max-w-md mx-auto z-50 rounded-t-[2.5rem] shadow-2xl">
                         {[
-                            { id: 'home', icon: 'calendar', label: '行程' },
-                            { id: 'must', icon: 'shopping-bag', label: '清單' },
-                            { id: 'expense', icon: 'receipt', label: '記帳' },
-                            { id: 'mtr', icon: 'layout-grid', label: '地鐵' },
-                            { id: 'tools', icon: 'languages', label: '工具' }
-                            { id: 'calc', icon: 'book-open', label: '記事' }
+                            { id: 'home', icon: Calendar, label: '行程' },
+                            { id: 'must', icon: ShoppingBag, label: '清單' },
+                            { id: 'expense', icon: Receipt, label: '分帳' },
+                            { id: 'mtr', icon: LayoutGrid, label: '地鐵' },
+                            { id: 'tools', icon: Languages, label: '工具' },
+                            { id: 'calc', icon: BookOpen, label: '記事' }
                         ].map(tab => (
-                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-1 ${activeTab === tab.id ? 'text-[#e87a90]' : 'text-[#dcd2c3]'}`}>
-                                <i data-lucide={tab.icon} style={{width:22, height:22}}></i>
-                                <span className="text-[10px] font-black uppercase">{tab.label}</span>
+                            <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-1 transition-all ${activeTab === tab.id ? 'text-[#e87a90] scale-110' : 'text-[#dcd2c3]'}`}>
+                                <tab.icon size={22} strokeWidth={activeTab === tab.id ? 3 : 2} />
+                                <span className="text-[8px] font-black uppercase tracking-tighter">{tab.label}</span>
                             </button>
                         ))}
                     </nav>
