@@ -75,7 +75,7 @@
                 
                 // 讀取行程
                 const unsubIt = db.doc(`${path}/itinerary/main`).onSnapshot(snap => {
-                    if(snap.exists()) setItinerary(JSON.parse(snap.data().json));
+                    if(snap.exists) setItinerary(JSON.parse(snap.data().json));
                 });
                 // 讀取記帳
                 const unsubExp = db.collection(`${path}/expenses`).onSnapshot(snap => {
