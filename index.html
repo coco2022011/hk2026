@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>香港迪士尼行 2026 - 雲端行程筆記</title>
+    <title>香港。行 2026 - 雲端行程筆記</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -23,149 +23,74 @@
 <body>
     <div id="root"></div>
 
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-storage-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
 
-    <script type="text/babel">
-        const { useState, useEffect, useMemo, useRef } = React;
-
-        // --- 初始化 Firebase (從你原本的變數獲取或直接填寫) ---
-        // 這裡預設你會在全域定義 __firebase_config，若無則請在此直接輸入物件
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-            apiKey: "AIzaSyAzCpLLNbc1ytaytke0cvwrkRumeaCkxUo",
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAzCpLLNbc1ytaytke0cvwrkRumeaCkxUo", // 這裡請填入你從 Firebase 複製的長金鑰
             authDomain: "hk-travel-1c9bc.firebaseapp.com",
             projectId: "hk-travel-1c9bc",
-            storageBucket: "hk-travel-1c9bc.appspot.com",
+            storageBucket: "hk-travel-1c9bc.firebasestorage.app", // 格式對了！
             messagingSenderId: "502792710467",
             appId: "1:502792710467:web:4034ebba5a301e9777a7f6"
         };
 
-        firebase.initializeApp(firebaseConfig);
-        const auth = firebase.auth();
-        const db = firebase.firestore();
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'hk-travel-2026-v-final-safe-v20';
-
-        const apiKey = ""; // 請在此填入 Google Gemini API Key
-        const GEMINI_TEXT_MODEL = "gemini-2.5-flash-preview-09-2025";
-        const GEMINI_TTS_MODEL = "gemini-2.5-flash-preview-tts";
-        const IMAGEN_MODEL = "imagen-4.0-generate-001";
-
-        // 輔助函式：Lucide 圖標組件化
-        const Icon = ({ name, size = 24, className = "", strokeWidth = 2 }) => {
-            const LucideIcon = lucide.icons[name];
-            return LucideIcon ? <i data-lucide={name.toLowerCase()} style={{ width: size, height: size }} className={className}></i> : null;
-        };
-
-        // PCM to WAV 轉碼
-        function pcmToWav(pcmBase64, sampleRate = 24000) {
-            const byteChars = atob(pcmBase64);
-            const byteNums = new Array(byteChars.length);
-            for (let i = 0; i < byteChars.length; i++) byteNums[i] = byteChars.charCodeAt(i);
-            const pcmData = new Uint8Array(byteNums);
-            const wavHeader = new ArrayBuffer(44);
-            const view = new DataView(wavHeader);
-            view.setUint32(0, 0x52494646, false);
-            view.setUint32(4, 36 + pcmData.length, true);
-            view.setUint32(8, 0x57415645, false);
-            view.setUint32(12, 0x666d7420, false);
-            view.setUint16(16, 16, true);
-            view.setUint16(20, 1, true);
-            view.setUint16(22, 1, true);
-            view.setUint32(24, sampleRate, true);
-            view.setUint32(28, sampleRate * 2, true);
-            view.setUint16(32, 2, true);
-            view.setUint16(34, 16, true);
-            view.setUint32(36, 0x64617461, false);
-            view.setUint32(40, pcmData.length, true);
-            return URL.createObjectURL(new Blob([wavHeader, pcmData], { type: 'audio/wav' }));
+        // 防止重複初始化
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
         }
+        const db = firebase.firestore();
+        const auth = firebase.auth();
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, useRef } = React;
 
         const App = () => {
             const [user, setUser] = useState(null);
             const [activeTab, setActiveTab] = useState('home'); 
             const [selectedDay, setSelectedDay] = useState(1);
-            const [isEditing, setIsEditing] = useState(false);
-            const [isAiLoading, setIsAiLoading] = useState(false);
-            const [syncStatus, setSyncStatus] = useState('');
             const [itinerary, setItinerary] = useState([]);
             const [expenses, setExpenses] = useState([]);
-            const [mustItems, setMustItems] = useState([]);
-            const [mtrGrid, setMtrGrid] = useState([]);
-            const [notices, setNotices] = useState([]); 
+            const appId = 'hk-travel-2026-v-final-safe-v20'; // 你的 App 識別碼
             const [customRate, setCustomRate] = useState(4.15);
-            
-            // 表單 Inputs
             const [transInput, setTransInput] = useState('');
-            const [calcInput, setCalcInput] = useState('100');
-            const [isHkdToTwd, setIsHkdToTwd] = useState(true);
-            const [newNoticeLine, setNewNoticeLine] = useState('');
-            const [mustTitle, setMustTitle] = useState('');
-            const [mustNotes, setMustNotes] = useState('');
-            const [mustType, setMustType] = useState('buy');
-            const [mustImg, setMustImg] = useState(null);
-            const [expTitle, setExpTitle] = useState('');
-            const [expAmount, setExpAmount] = useState('');
-            const [expCurrency, setExpCurrency] = useState('HKD');
-            const [expPayer, setExpPayer] = useState('Ding');
-            const mustFileRef = useRef(null);
 
-            // 初始化與 Auth
+            // 初始化 Auth 與 Lucide 圖標
             useEffect(() => {
                 auth.signInAnonymously().catch(console.error);
                 auth.onAuthStateChanged((u) => {
                     setUser(u);
-                    lucide.createIcons(); // 每次渲染後初始化圖標
                 });
+                // 網頁載入後先跑一次圖標初始化
+                setTimeout(() => lucide.createIcons(), 500);
             }, []);
 
-            // 資料訂閱
+            // 每當切換分頁或資料變動，重新掃描圖標
+            useEffect(() => {
+                lucide.createIcons();
+            }, [activeTab, selectedDay, itinerary]);
+
+            // 資料訂閱 (Cloud Sync)
             useEffect(() => {
                 if (!user) return;
                 const path = `artifacts/${appId}/public/data`;
                 
+                // 訂閱行程
                 const unsubIt = db.doc(`${path}/itinerary/main`).onSnapshot(snap => {
                     if(snap.exists()) setItinerary(JSON.parse(snap.data().json));
                 });
-                const unsubMtr = db.doc(`${path}/mtr/main`).onSnapshot(snap => {
-                    if(snap.exists()) setMtrGrid(JSON.parse(snap.data().json));
-                });
-                const unsubNotice = db.doc(`${path}/notices/main`).onSnapshot(snap => {
-                    if(snap.exists()) setNotices(JSON.parse(snap.data().json));
-                });
+                // 訂閱記帳
                 const unsubExp = db.collection(`${path}/expenses`).onSnapshot(snap => {
                     setExpenses(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
                 });
-                const unsubMust = db.collection(`${path}/mustItems`).onSnapshot(snap => {
-                    setMustItems(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => b.timestamp - a.timestamp));
-                });
 
-                return () => { unsubIt(); unsubMtr(); unsubNotice(); unsubExp(); unsubMust(); };
+                return () => { unsubIt(); unsubExp(); };
             }, [user]);
 
-            useEffect(() => { lucide.createIcons(); }, [activeTab, selectedDay, isEditing, itinerary]);
-
-            // 邏輯處理 (省略部分重複邏輯，與 React 版一致)
-            const saveItineraryCloud = async () => {
-                setSyncStatus('saving');
-                try {
-                    await db.doc(`artifacts/${appId}/public/data/itinerary/main`).set({ json: JSON.stringify(itinerary) });
-                    setSyncStatus('success');
-                    setTimeout(() => { setSyncStatus(''); setIsEditing(false); }, 2000);
-                } catch(e) { setSyncStatus('error'); }
-            };
-
-            const handlePlayTTS = async (text) => {
-                try {
-                    const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_TTS_MODEL}:generateContent?key=${apiKey}`;
-                    const res = await fetch(url, { 
-                        method: 'POST', 
-                        body: JSON.stringify({ contents: [{ parts: [{ text: `用廣東話朗讀：${text}` }] }], generationConfig: { responseModalities: ["AUDIO"], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: "Kore" } } } } }) 
-                    }).then(r => r.json());
-                    new Audio(pcmToWav(res.candidates[0].content.parts[0].inlineData.data)).play();
-                } catch (e) {}
-            };
-
+            // 結算邏輯
             const settlement = useMemo(() => {
                 let d = 0, i = 0;
                 expenses.forEach(e => {
@@ -173,25 +98,32 @@
                     if (e.payer === 'Ding') d += amt; else i += amt;
                 });
                 const diff = Math.abs(d - (d + i) / 2);
-                return { dTotal: d, iTotal: i, who: d > i ? { debtor: 'Iris', creditor: 'Ding', amt: diff } : { debtor: 'Ding', creditor: 'Iris', amt: diff } };
+                return { 
+                    dTotal: d, 
+                    iTotal: i, 
+                    who: d > i ? { debtor: 'Iris', creditor: 'Ding', amt: diff } : { debtor: 'Ding', creditor: 'Iris', amt: diff } 
+                };
             }, [expenses, customRate]);
 
+            // 載入畫面
             if (!user || itinerary.length === 0) return (
-                <div className="flex flex-col items-center justify-center min-h-screen">
-                    <div className="animate-bounce text-rose-400"><i data-lucide="cloud" style={{width:48, height:48}}></i></div>
-                    <p className="text-stone-500 font-black text-xs mt-4 uppercase">Syncing Cloud...</p>
+                <div className="flex flex-col items-center justify-center min-h-screen bg-[#f5f0e6]">
+                    <div className="animate-bounce text-rose-400">
+                        <i data-lucide="cloud" style={{width:48, height:48}}></i>
+                    </div>
+                    <p className="text-stone-500 font-black text-xs mt-4 uppercase">Connecting to Hong Kong...</p>
                 </div>
             );
 
             return (
-                <div className="max-w-md mx-auto bg-[#f5f0e6] min-h-screen relative pb-32 text-[#4e3b31] overflow-x-hidden">
+                <div className="max-w-md mx-auto bg-[#f5f0e6] min-h-screen relative pb-32 text-[#4e3b31]">
                     <header className="pt-10 pb-6 px-6 relative flex flex-col items-center border-b border-[#ede0d4]">
                         <div className="flex items-center gap-2 mb-1">
                             <i data-lucide="anchor" className="text-[#9c6644] w-5 h-5"></i>
                             <h2 className="text-[#e87a90] text-2xl font-black tracking-widest uppercase">香港。行</h2>
                         </div>
                         <div className="absolute top-8 right-6">
-                            <div className="bg-[#f2ca5e] px-4 py-1.5 rounded-full font-black text-xs shadow-md border-2 border-[#4e3b31]/10">DAY {selectedDay}</div>
+                            <div className="bg-[#f2ca5e] px-4 py-1.5 rounded-full font-black text-xs shadow-md">DAY {selectedDay}</div>
                         </div>
                     </header>
 
@@ -203,9 +135,7 @@
                                         <button key={d} onClick={() => setSelectedDay(d)} className={`w-10 h-10 rounded-full font-black text-xs border-2 ${selectedDay === d ? 'bg-[#7f5539] text-white' : 'bg-white'}`}>{d}</button>
                                     ))}
                                 </div>
-                                
-                                {/* 住宿與餐飲卡片 */}
-                                <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-[#ede0d4] space-y-6 text-left">
+                                <div className="bg-white rounded-[2rem] p-6 shadow-xl space-y-6 text-left">
                                     <div className="flex items-start gap-4">
                                         <i data-lucide="bed" className="text-rose-400 mt-1"></i>
                                         <div className="flex-1">
@@ -213,97 +143,48 @@
                                             <h4 className="font-black text-[18px]">{itinerary[selectedDay-1]?.hotel}</h4>
                                         </div>
                                     </div>
-                                    <div className="flex items-start gap-4 border-t pt-4">
-                                        <i data-lucide="utensils" className="text-amber-400 mt-1"></i>
-                                        <div className="flex-1 grid grid-cols-2 gap-4">
-                                            {['breakfast', 'lunch', 'snack', 'dinner'].map(k => (
-                                                <div key={k}>
-                                                    <span className="text-[9px] font-bold text-[#dcd2c3] uppercase">{k}</span>
-                                                    <span className="text-[18px] font-black block truncate">{itinerary[selectedDay-1]?.meals?.[k] || "-"}</span>
-                                                </div>
-                                            ))}
+                                </div>
+                                {/* 行程項目 */}
+                                {(itinerary[selectedDay-1]?.activities || []).map((act, idx) => (
+                                    <div key={idx} className="bg-white rounded-[2rem] p-6 shadow-xl text-left border border-[#ede0d4]">
+                                        <div className="flex items-center gap-2 mb-2">
+                                            <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded">{act.time}</span>
+                                            <h4 className="font-black text-[18px]">{act.title}</h4>
                                         </div>
+                                        <p className="text-[#8e7d6f] italic text-sm">{act.notes}</p>
                                     </div>
-                                </div>
-
-                                {/* 行程列表 */}
-                                <div className="space-y-8 pb-10">
-                                    {(itinerary[selectedDay-1]?.activities || []).map((act, idx) => (
-                                        <div key={idx} className="bg-white rounded-[2rem] p-6 shadow-xl border border-[#ede0d4] text-left">
-                                            <div className="flex gap-4">
-                                                <div className="flex-1 space-y-3">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded">{act.time}</span>
-                                                        <h4 className="font-black text-[20px]">{act.title}</h4>
-                                                    </div>
-                                                    <div className="bg-[#fcfaf7] p-3 rounded-2xl border-l-4 border-[#f2ca5e]">
-                                                        <p className="text-[18px] italic text-[#8e7d6f]">{act.notes}</p>
-                                                    </div>
-                                                </div>
-                                                {act.img && (
-                                                    <div className="w-24 shrink-0 bg-white p-1 shadow-md border rotate-2 rounded-sm h-20">
-                                                        <img src={act.img} className="w-full h-full object-cover" />
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <div className="mt-4 pt-4 border-t border-dashed border-[#ede0d4] flex items-center justify-between">
-                                                <div className="text-[10px] font-bold text-[#a69685] flex items-center gap-1">
-                                                    <i data-lucide="map-pin" className="text-rose-400" style={{width:10}}></i> {act.addr}
-                                                </div>
-                                                <button onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(act.addr || act.title)}`)} className="bg-[#b2e2f2] text-[8px] font-black px-3 py-1 rounded-full">G-Map</button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
+                                ))}
                             </div>
                         )}
 
-                        {/* 其他分頁以此類推... 翻譯分頁範例 */}
-                        {activeTab === 'tools' && (
-                            <div className="space-y-6">
-                                <h2 className="text-2xl font-black text-[#e87a90]">廣東話翻譯🍭</h2>
-                                <div className="bg-white rounded-[2rem] p-6 shadow-xl space-y-4">
-                                    <textarea className="w-full h-24 p-4 bg-[#fcfaf7] rounded-2xl border outline-none" placeholder="想翻譯什麼中文？" value={transInput} onChange={e => setTransInput(e.target.value)} />
-                                    <button onClick={() => window.open(`https://translate.google.com/?sl=zh-TW&tl=yue&text=${encodeURIComponent(transInput)}`)} className="w-full bg-[#7f5539] text-white py-3.5 rounded-xl font-black">Google 翻譯</button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* 記帳分頁 */}
                         {activeTab === 'expense' && (
-                            <div className="space-y-6">
-                                <div className="bg-[#fcfaf7] rounded-[2.5rem] p-6 shadow-xl border-2 border-[#ede0d4]">
-                                    <div className="bg-[#f2ca5e] p-5 rounded-3xl text-center">
-                                        <h4 className="text-lg font-black">{settlement.who.debtor} 要給 {settlement.who.creditor} NT$ {settlement.who.amt.toFixed(0)}</h4>
-                                    </div>
+                            <div className="space-y-6 text-left">
+                                <div className="bg-[#f2ca5e] p-5 rounded-3xl text-center shadow-lg">
+                                    <h4 className="font-black">{settlement.who.debtor} 需付給 {settlement.who.creditor}</h4>
+                                    <p className="text-2xl font-black">NT$ {settlement.who.amt.toFixed(0)}</p>
                                 </div>
-                                <div className="space-y-3">
-                                    {expenses.map(e => (
-                                        <div key={e.id} className="bg-white p-4 rounded-2xl shadow-sm border flex justify-between items-center">
-                                            <div className="flex gap-4 items-center">
-                                                <div className={`w-10 h-10 rounded-full flex items-center justify-center font-black ${e.payer === 'Ding' ? 'bg-blue-50 text-blue-500' : 'bg-rose-50 text-rose-500'}`}>{e.payer[0]}</div>
-                                                <div className="font-black text-left"><p>{e.title}</p><p className="text-[#a69685] text-xs">{e.currency} {e.amount}</p></div>
-                                            </div>
+                                {expenses.map(e => (
+                                    <div key={e.id} className="bg-white p-4 rounded-2xl shadow-sm flex justify-between items-center border border-[#ede0d4]">
+                                        <div className="font-black">
+                                            <p>{e.title}</p>
+                                            <p className="text-xs text-[#a69685]">{e.currency} {e.amount} (by {e.payer})</p>
                                         </div>
-                                    ))}
-                                </div>
+                                        <i data-lucide="receipt" className="text-[#dcd2c3]"></i>
+                                    </div>
+                                ))}
                             </div>
                         )}
                     </main>
 
-                    {/* Navigation */}
-                    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t-2 border-[#dcd2c3] px-4 py-4 flex justify-between items-center max-w-md mx-auto z-50 rounded-t-[2.5rem] shadow-2xl">
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t-2 border-[#dcd2c3] px-4 py-4 flex justify-between items-center max-w-md mx-auto z-50 rounded-t-[2.5rem]">
                         {[
                             { id: 'home', icon: 'calendar', label: '行程' },
-                            { id: 'must', icon: 'shopping-bag', label: '必去' },
                             { id: 'expense', icon: 'receipt', label: '記帳' },
-                            { id: 'mtr', icon: 'layout-grid', label: '地鐵' },
-                            { id: 'tools', icon: 'languages', label: '翻譯' },
-                            { id: 'calc', icon: 'book-open', label: '記事' }
+                            { id: 'tools', icon: 'languages', label: '翻譯' }
                         ].map(tab => (
                             <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-1 transition-all ${activeTab === tab.id ? 'text-[#e87a90] scale-110' : 'text-[#dcd2c3]'}`}>
                                 <i data-lucide={tab.icon} style={{width:22, height:22}}></i>
-                                <span className="text-[7px] font-black uppercase">{tab.label}</span>
+                                <span className="text-[10px] font-black uppercase">{tab.label}</span>
                             </button>
                         ))}
                     </nav>
