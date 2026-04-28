@@ -9,7 +9,6 @@
     <style>
         body { font-family: 'Noto Serif TC', serif; background-color: #f5f0e6; -webkit-font-smoothing: antialiased; }
         .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         .paper-texture { 
             position: fixed; inset: 0; pointer-events: none; opacity: 0.05; z-index: 100;
             background-image: url('https://www.transparenttextures.com/patterns/paper-fibers.png'); 
@@ -19,28 +18,19 @@
 <body>
     <div id="root"></div>
 
-    <script type="importmap">
-    {
-      "imports": {
-        "react": "https://esm.sh/react@18.2.0",
-        "react-dom": "https://esm.sh/react-dom@18.2.0/client",
-        "lucide-react": "https://esm.sh/lucide-react@0.344.0",
-        "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
-        "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
-        "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
-      }
-    }
-    </script>
-
     <script type="module">
-        import React, { useState, useEffect } from 'react';
-        import ReactDOM from 'react-dom';
-        import * as Lucide from 'lucide-react';
-        import { initializeApp } from 'firebase/app';
-        import { getAuth, signInAnonymously, onAuthStateChanged } from 'firebase/auth';
-        import { getFirestore, doc, setDoc, collection, onSnapshot } from 'firebase/firestore';
+        // 使用 htm 庫，讓你不需要 Babel 也能寫類似 HTML 的語法
+        import React, { useState, useEffect } from 'https://esm.sh/react@18.2.0';
+        import ReactDOM from 'https://esm.sh/react-dom@18.2.0/client';
+        import htm from 'https://esm.sh/htm';
+        import * as Lucide from 'https://esm.sh/lucide-react';
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js';
+        import { getAuth, signInAnonymously, onAuthStateChanged } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js';
+        import { getFirestore, doc, onSnapshot } from 'https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js';
 
-        // 1. Firebase 配置 (請貼換為你的金鑰)
+        const html = htm.bind(React.createElement);
+
+        // --- Firebase 配置 (請自行填入) ---
         const firebaseConfig = { 
             apiKey: "AIzaSyDvYWGfyFZb2TNbug8NXZrAzNMmv7DwlEM", 
             authDomain: "hk-travel-1c9bc.firebaseapp.com", 
@@ -63,8 +53,6 @@
             const [clickCount, setClickCount] = useState(0);
 
             const [itinerary, setItinerary] = useState([]);
-            const [mtrGrid, setMtrGrid] = useState([]);
-            const [notices, setNotices] = useState([]);
 
             useEffect(() => {
                 signInAnonymously(auth);
@@ -73,27 +61,20 @@
 
             useEffect(() => {
                 if (!user) return;
-                // 網管規則：if (snap.exists) 不加括號
+                // 網管最後提醒規格：if (snap.exists) 不加括號
                 onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'itinerary', 'main'), (snap) => {
                     if (snap.exists) setItinerary(JSON.parse(snap.data().json || "[]"));
-                });
-                onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'mtr', 'main'), (snap) => {
-                    if (snap.exists) setMtrGrid(JSON.parse(snap.data().json || "[]"));
-                });
-                onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'notices', 'main'), (snap) => {
-                    if (snap.exists) setNotices(JSON.parse(snap.data().json || "[]"));
                 });
             }, [user]);
 
             const handleHeaderClick = () => {
-                setClickCount(prev => {
-                    if (prev + 1 >= 5) {
-                        setIsEditing(!isEditing);
-                        alert(isEditing ? "編輯模式關閉" : "編輯模式開啟");
-                        return 0;
-                    }
-                    return prev + 1;
-                });
+                const count = clickCount + 1;
+                setClickCount(count);
+                if (count >= 5) {
+                    setIsEditing(!isEditing);
+                    alert(isEditing ? "編輯模式已關閉" : "管理員模式已開啟 ✨");
+                    setClickCount(0);
+                }
             };
 
             const navTabs = [
@@ -105,55 +86,58 @@
                 { id: 'calc', icon: 'BookOpen', label: '記事' }
             ];
 
-            if (!user) return <div className="flex h-screen items-center justify-center text-[10px] tracking-[0.5em] opacity-20">CONNECTING...</div>;
+            if (!user) return html`<div className="flex h-screen items-center justify-center opacity-20 text-[10px] tracking-[0.5em]">CONNECTING...</div>`;
 
-            return React.createElement('div', { className: 'max-w-md mx-auto bg-[#f5f0e6] min-h-screen relative pb-32' },
-                React.createElement('div', { className: 'paper-texture' }),
-                
-                // Header
-                React.createElement('header', { 
-                    className: 'pt-12 pb-8 px-6 text-center border-b border-[#ede0d4] cursor-pointer',
-                    onClick: handleHeaderClick 
-                },
-                    React.createElement('h2', { className: 'text-[#e87a90] text-3xl font-black tracking-[0.3em]' }, '香港迪士尼行'),
-                    React.createElement('p', { className: 'text-[9px] text-[#a69685] font-black tracking-[0.5em] mt-2' }, 'MARCH 2026')
-                ),
+            return html`
+                <div className="max-w-md mx-auto bg-[#f5f0e6] min-h-screen relative pb-32">
+                    <div className="paper-texture"></div>
 
-                // Main Content Area
-                React.createElement('main', { className: 'p-5' },
-                    isEditing && React.createElement('div', { className: 'bg-amber-100 p-2 mb-4 text-[10px] text-center font-bold rounded' }, '⚠️ 編輯模式已啟動'),
-                    
-                    activeTab === 'home' && React.createElement('div', null, 
-                        React.createElement('div', { className: 'flex justify-center gap-3 mb-8' },
-                            [1, 2, 3, 4].map(d => React.createElement('button', {
-                                key: d,
-                                onClick: () => setSelectedDay(d),
-                                className: `w-10 h-10 rounded-xl font-black ${selectedDay === d ? 'bg-[#7f5539] text-white' : 'bg-white text-[#8e7d6f]'}`
-                            }, d))
-                        ),
-                        itinerary.length === 0 && React.createElement('p', { className: 'text-center opacity-30 italic py-20' }, '雲端尚無行程數據...')
-                    )
-                ),
+                    <header className="pt-12 pb-8 px-6 text-center border-b border-[#ede0d4] cursor-pointer" onClick=${handleHeaderClick}>
+                        <div className="flex items-center justify-center gap-3">
+                            <${Lucide.Anchor} className="text-[#9c6644]" size=${24} />
+                            <h2 className="text-[#e87a90] text-3xl font-black tracking-[0.3em]">香港。行</h2>
+                        </div>
+                        <p className="text-[9px] text-[#a69685] font-black uppercase tracking-[0.5em] mt-2">March 2026 / Adventure</p>
+                    </header>
 
-                // Bottom Nav
-                React.createElement('nav', { className: 'fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#dcd2c3] px-2 py-5 flex justify-between items-center max-w-md mx-auto z-50 rounded-t-[2.5rem]' },
-                    navTabs.map(tab => {
-                        const IconComponent = Lucide[tab.icon];
-                        return React.createElement('button', {
-                            key: tab.id,
-                            onClick: () => setActiveTab(tab.id),
-                            className: `flex flex-col items-center gap-1 flex-1 transition-all ${activeTab === tab.id ? 'text-[#e87a90] scale-110' : 'text-[#dcd2c3]'}`
-                        },
-                            React.createElement(IconComponent, { size: 20 }),
-                            React.createElement('span', { className: 'text-[8px] font-black' }, tab.label)
-                        );
-                    })
-                )
-            );
+                    <main className="p-5">
+                        ${activeTab === 'home' && html`
+                            <div className="space-y-6">
+                                <div className="flex justify-center gap-3">
+                                    ${[1, 2, 3, 4].map(d => html`
+                                        <button key=${d} onClick=${() => setSelectedDay(d)} className=${`w-10 h-10 rounded-xl font-black ${selectedDay === d ? 'bg-[#7f5539] text-white shadow-lg' : 'bg-white text-[#8e7d6f]'}`}>
+                                            ${d}
+                                        </button>
+                                    `)}
+                                </div>
+                                <div className="bg-white rounded-[2rem] p-6 shadow-xl border border-[#ede0d4] text-center py-20">
+                                    <p className="opacity-30 italic text-sm">數據已連線至 Firestore...現正顯示 Day ${selectedDay}</p>
+                                    ${isEditing && html`<button className="mt-4 text-xs bg-rose-50 text-rose-500 p-2 rounded-lg border border-rose-100">+ 增加行程點</button>`}
+                                </div>
+                            </div>
+                        `}
+                        ${activeTab !== 'home' && html`
+                            <div className="py-20 text-center text-[#a69685] opacity-50">
+                                <${Lucide.Loader2} className="animate-spin mx-auto mb-4" />
+                                <p className="text-xs uppercase tracking-widest">${activeTab} 功能對接中...</p>
+                            </div>
+                        `}
+                    </main>
+
+                    <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-[#dcd2c3] px-2 py-5 flex justify-between items-center max-w-md mx-auto z-50 rounded-t-[2.5rem] shadow-2xl">
+                        ${navTabs.map(tab => html`
+                            <button key=${tab.id} onClick=${() => setActiveTab(tab.id)} className=${`flex flex-col items-center gap-1 flex-1 transition-all ${activeTab === tab.id ? 'text-[#e87a90] scale-110' : 'text-[#dcd2c3]'}`}>
+                                <${Lucide[tab.icon]} size=${20} strokeWidth=${activeTab === tab.id ? 3 : 2} />
+                                <span className="text-[8px] font-black uppercase tracking-tighter">${tab.label}</span>
+                            </button>
+                        `)}
+                    </nav>
+                </div>
+            `;
         };
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(React.createElement(App));
+        root.render(html`<${App} />`);
     </script>
 </body>
 </html>
