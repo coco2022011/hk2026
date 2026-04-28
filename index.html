@@ -129,6 +129,7 @@
                                 {itinerary[selectedDay-1]?.activities?.map((act, i) => (
                                     <div key={i} className="bg-white rounded-[2rem] p-6 shadow-xl text-left border border-[#ede0d4]">
                                         <div className="flex items-center gap-2 mb-2">
+                                       
                                             <span className="text-[10px] font-black bg-slate-100 px-2 py-0.5 rounded">{act.time}</span>
                                             <h4 className="font-black text-[18px]">{act.title}</h4>
                                         </div>
@@ -149,8 +150,11 @@
                     <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t-2 border-[#dcd2c3] px-4 py-4 flex justify-between items-center max-w-md mx-auto z-50 rounded-t-[2.5rem] shadow-2xl">
                         {[
                             { id: 'home', icon: 'calendar', label: '行程' },
+                            { id: 'must', icon: 'shopping-bag', label: '清單' },
                             { id: 'expense', icon: 'receipt', label: '記帳' },
+                            { id: 'mtr', icon: 'layout-grid', label: '地鐵' },
                             { id: 'tools', icon: 'languages', label: '工具' }
+                            { id: 'calc', icon: 'book-open', label: '記事' }
                         ].map(tab => (
                             <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col items-center gap-1 ${activeTab === tab.id ? 'text-[#e87a90]' : 'text-[#dcd2c3]'}`}>
                                 <i data-lucide={tab.icon} style={{width:22, height:22}}></i>
